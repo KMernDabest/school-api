@@ -50,8 +50,46 @@ export const createTeacher = async (req, res) => {
  */
 export const getAllTeachers = async (req, res) => {
     try {
-        const teachers = await db.Teacher.findAll({ include: db.Course });
-        res.json(teachers);
+        // Pagination
+        const limit = parseInt(req.query.limit) || 10;
+        const page = parseInt(req.query.page) || 1;
+        const offset = (page - 1) * limit;
+        
+        // Sorting
+                const sort = req.query.sort === 'asc' ? 'ASC' : 'DESC';
+        
+        // Eager loading
+        const populate = req.query.populate;
+        let includeOptions = [];
+        
+        if(populate){
+            const populateArray = populate.split(',');
+            if(populateArray.includes('courses')){
+                includeOptions.push(db.Course);
+            }
+        }
+
+        // Get total count for pagination
+        const total = await db.Teacher.count();
+
+        const teachers = await db.Teacher.findAll({
+            include: includeOptions,
+            limit: limit,
+            offset: offset,
+            order: [['createdAt', sort]]
+        });
+
+        res.json({
+            meta: {
+                totalItems: total,
+                page: page,
+                totalPages: Math.ceil(total / limit),
+                limit: limit,
+                sort: sort.toLowerCase()
+            },
+            data: teachers
+        });
+
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -76,9 +114,24 @@ export const getAllTeachers = async (req, res) => {
  */
 export const getTeacherById = async (req, res) => {
     try {
-        const teacher = await db.Teacher.findByPk(req.params.id, { include: db.Course });
+        // Eager Loading
+        const populate = req.query.populate;
+        let includeOptions = [];
+        
+        if (populate) {
+            const populateArray = populate.split(',');
+            if (populateArray.includes('courses')) {
+                includeOptions.push(db.Course);
+            }
+        }
+
+        const teacher = await db.Teacher.findByPk(req.params.id, { 
+            include: includeOptions 
+        });
+        
         if (!teacher) return res.status(404).json({ message: 'Not found' });
         res.json(teacher);
+
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

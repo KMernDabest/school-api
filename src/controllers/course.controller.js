@@ -61,25 +61,46 @@ export const createCourse = async (req, res) => {
  */
 export const getAllCourses = async (req, res) => {
 
-    // take certain amount at a time
-    const limit = parseInt(req.query.limit) || 10;
-    // which page to take
-    const page = parseInt(req.query.page) || 1;
-
-    const total = await db.Course.count();
-
     try {
-        const courses = await db.Course.findAll(
-            {
-                // include: [db.Student, db.Teacher],
-                limit: limit, offset: (page - 1) * limit
+        // pagination
+        const limit = parseInt(req.query.limit) || 10;
+        const page = parseInt(req.query.page) || 1;
+        const offset = (page - 1) * limit;
+
+        // sorting
+        const sort = req.query.sort === 'asc' ? 'ASC' : 'DESC';
+
+        // eager loading
+        const populate = req.query.populate;
+        let includeOptions = [];
+
+        if(populate) {
+            const populateArray = populate.split(',');
+            if(populateArray.includes('teacher')){
+                includeOptions.push(db.Teacher);
             }
-        );
+            if(populateArray.includes('student')){
+                includeOptions.push(db.Student);
+            }
+        }
+
+        // get total count for pagination pages
+        const total = await db.Course.count();
+
+        const courses = await db.Course.findAll({
+            include: includeOptions,
+            limit: limit,
+            offset: offset,
+            order: [['createdAt', sort]]
+        })
+
         res.json({
             meta: {
                 totalItems: total,
                 page: page,
                 totalPages: Math.ceil(total / limit),
+                limit: limit,
+                sort: sort.toLowerCase()
             },
             data: courses,
         });
@@ -107,8 +128,25 @@ export const getAllCourses = async (req, res) => {
  */
 export const getCourseById = async (req, res) => {
     try {
-        const course = await db.Course.findByPk(req.params.id, { include: [db.Student, db.Teacher] });
-        if (!course) return res.status(404).json({ message: 'Not found' });
+        // eager loading
+        const populate = req.query.populate;
+        let includeOptions = [];
+
+        if(populate) {  
+            const populateArray = populate.split(',');
+            if(populateArray.includes('teacher')){
+                includeOptions.push(db.Teacher);
+            }
+            if(populateArray.includes('student')){
+                includeOptions.push(db.Student);
+            }
+        }
+
+        const course = await db.Course.findByPk(req.params.id, {
+            include: includeOptions
+        })
+
+        if(!course) return res.status(404).json({ messsage: 'Not found' });
         res.json(course);
     } catch (err) {
         res.status(500).json({ error: err.message });

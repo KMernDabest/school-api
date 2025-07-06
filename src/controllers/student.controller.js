@@ -28,8 +28,46 @@ export const createStudent = async (req, res) => {
  */
 export const getAllStudents = async (req, res) => {
     try {
-        const students = await db.Student.findAll({ include: db.Course });
-        res.json(students);
+        // Pagination
+        const limit = parseInt(req.query.limit) || 10;
+        const page = parseInt(req.query.page) || 1;
+        const offset = (page - 1) * limit;
+
+        // Sorting
+        const sort = req.query.sort === 'asc' ? 'ASC' : 'DESC';
+
+        // Eager loading
+        const populate = req.query.populate;
+        let includeOptions = [];
+
+        if(populate){
+            const populateArray = populate.split(',');
+            if(populateArray.includes('courses')){
+                includeOptions.push(db.Course);
+            }
+        }
+
+        // Get total count for pagination
+        const total = await db.Student.count();
+
+        const students = await db.Student.findAll({
+            include: includeOptions,
+            limit: limit,
+            offset: offset,
+            order: [['createdAt', sort]]
+        });
+
+        res.json({
+            meta: {
+                totalItems: total,
+                page: page,
+                totalPages: Math.ceil(total / limit),
+                limit: limit,
+                sort: sort.toLowerCase()
+            },
+            data: students
+        });
+
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -54,9 +92,24 @@ export const getAllStudents = async (req, res) => {
  */
 export const getStudentById = async (req, res) => {
     try {
-        const student = await db.Student.findByPk(req.params.id, { include: db.Course });
-        if (!student) return res.status(404).json({ message: 'Not found' });
+        // eager loading
+        const populate = req.query.populate;
+        let includeOptions = [];
+
+        if(populate){
+            const populateArray = populate.split(',');
+            if(populateArray.includes('courses')){
+                includeOptions.push(db.Course);
+            }
+        }
+
+        const student = await db.Student.findByPk(req.params.id, {
+            include: includeOptions
+        });
+
+        if(!student) return res.status(404).json({ message: 'Not found' });
         res.json(student);
+
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
